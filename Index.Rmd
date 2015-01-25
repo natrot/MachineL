@@ -1,0 +1,66 @@
+---
+title: "Machine learning Writeup"
+author: "Jan Bezuidenhout"
+date: "Tuesday, January 20, 2015"
+output: html_document
+---
+
+This report illustrates the steps followed to build a predictive model based on the quantified self movement data. 
+See <http://groupware.les.inf.puc-rio.br/har> for more details.
+
+Below is a list of the packages use. 
+```{r packages, results = 'hide', warning=FALSE, message=FALSE}
+library(data.table)
+library(rpart)
+library(party)
+library(partykit)
+library(caret)
+```
+
+For this report only the training data was used. To reduce the number of features for the model, all features with a variance of less than 10 was excluded.
+
+```{r getdata}
+data.Train <- as.data.frame(fread('pml-training.csv'))
+data.Train <- subset(data.Train, select=c(magnet_forearm_y,magnet_arm_x,magnet_forearm_z,magnet_forearm_x,magnet_dumbbell_x,
+                                          magnet_dumbbell_y,magnet_arm_z,magnet_arm_y,accel_forearm_y,accel_arm_x,accel_forearm_x,
+                                          magnet_dumbbell_z,accel_forearm_z,accel_arm_z,accel_arm_y,accel_dumbbell_z,roll_forearm,
+                                          yaw_forearm,accel_belt_z,yaw_belt,yaw_dumbbell,accel_dumbbell_y,roll_arm,yaw_arm,
+                                          roll_dumbbell,accel_dumbbell_x,magnet_belt_z,magnet_belt_x,roll_belt,pitch_dumbbell,
+                                          magnet_belt_y,pitch_arm,accel_belt_x,accel_belt_y,pitch_forearm,pitch_belt,total_accel_arm,
+                                          total_accel_dumbbell,total_accel_forearm,total_accel_belt, classe))
+
+data.Train$classe <- as.factor(data.Train$classe)
+```
+
+The model was not built with the caret package, but with the rpart package. A Decision tree model was selected because of the ease of interpreting the actual model.
+
+maxdepth was set to 15 although the accuracy of the model started to taper down from 11.
+
+```{r, model}
+rpart.model <- rpart(classe ~. ,data = data.Train,  control = rpart.control(maxdepth = 15))
+```
+
+Below is an illustration of what the actual model looks like. The plot is not very clear due to the number of nodes selected for this model.
+
+```{r, modelplot}
+rpart.plot <- as.party(rpart.model)
+plot(rpart.plot)
+```
+
+Finally cross validation is performed on one subset of the training data. The estimated accuracy is above 70%. When the actual predictions on the Test set was submitted this model scored 14 out of 20, thus close to the suggested accuracy.
+
+```{r, modelvalidation}
+data.test <- data.Train[sample(nrow(data.Train), 300), ]
+# summary(data.test$classe)
+
+test.x <- subset(data.test, select=-classe)
+test.y <- subset(data.test, select=classe)
+test.y <- sapply(test.y, as.factor)
+test.y <- as.factor(test.y)
+levels(test.y) <- c('A','B','C','D','E')
+
+rpPred <- predict(rpart.model, newdata = data.test, type = 'class')
+
+confusionMatrix(rpPred, test.y)
+```
+
